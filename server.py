@@ -1,51 +1,62 @@
-# IMPORTS
 import socket
 import threading
 
-# Port, Server, Header, Address, Disconnection Message Format config
-HEADER = 64
-PORT = 5050
-SERVER = "192.168.0.6"
-ADDR = (SERVER, PORT) 
-FORMAT = 'utf-8'
-DISCONNECTION_MESSAGE = "<!Disconnect!>"
+# Connection Data
+host = '192.168.0.6'
+port = 5050
 
-# Creating the server
+# Starting Server
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(ADDR)
+server.bind((host, port))
+server.listen()
 
-# Loggin function
-def log(tag, value):
-    print(f"[{tag}] {value}")
+# Lists For Clients and Their Nicknames
+clients = []
+nicknames = []
 
-# Handling the client
-def handle_client(conn, addr):
-    log("NEW CONNECTION", f"{addr} connected")
-    connected = True
-    while connected:
-        msg_length = conn.recv(HEADER).decode(FORMAT)
-        if msg_length:
-            msg_length = int(msg_length)
-            msg = conn.recv(msg_length).decode(FORMAT)
-            if msg == DISCONNECT_MESSAGE:
-                connected = False
-            log(addr, f"{msg}")
-            conn.send("Msg Received".encode(FORMAT))
-    conn.close
+# Sending Messages To All Connected Clients
+def broadcast(message):
+    for client in clients:
+        client.send(message)
 
-# Starting the server function
-def start():
-    # Listening for new connection
-    server.listen()
-    log("LISTINGIN", f"server is listening on http://{SERVER}:{PORT}/")
+# Handling Messages From Clients
+def handle(client):
     while True:
-        # Getting the connection and then the address then handling the connection
-        conn, addr = server.accept()
-        thread = threading.Thread(target=handle_client, args= (conn, addr))
+        try:
+            # Broadcasting Messages
+            message = client.recv(1024)
+            broadcast(message)
+        except:
+            # Removing And Closing Clients
+            index = clients.index(client)
+            clients.remove(client)
+            client.close()
+            nickname = nicknames[index]
+            broadcast('[Leaving] {} left the chat!'.format(nickname).encode('ascii'))
+            nicknames.remove(nickname)
+            break
+
+# Receiving / Listening Function
+def receive():
+    while True:
+        # Accept Connection
+        client, address = server.accept()
+        print("[CONNECTED] Connected with {}".format(str(address)))
+
+        # Request And Store Nickname
+        client.send('NICK'.encode('ascii'))
+        nickname = client.recv(1024).decode('ascii')
+        nicknames.append(nickname)
+        clients.append(client)
+
+        # Print And Broadcast Nickname
+        print("[NICKNAME] Nickname is {}".format(nickname))
+        broadcast("[JOINED] {} joined!".format(nickname).encode('ascii'))
+        client.send('[CONNECTED] Connected to server!'.encode('ascii'))
+
+        # Start Handling Thread For Client
+        thread = threading.Thread(target=handle, args=(client,))
         thread.start()
-        log("ACTIVE CONNECTIONS", (threading.activeCount() - 1))
 
-
-# Starting the server
-log("STARTING", "starting the server ...")
-start()
+print("[LISTENING] The server is listening ...")
+receive()

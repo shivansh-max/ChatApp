@@ -1,31 +1,37 @@
-# IMPORTS
 import socket
+import threading
 
-# Port, Header, Disconnection Message Format, SERVER, ADDR config
-HEADER = 64
-PORT = 5050
-FORMAT = 'utf-8'
-DISCONNECTION_MESSAGE = "<!Disconnect!>"
-SERVER = "192.168.0.6"
-ADDR = (SERVER, PORT) 
+# Choosing Nickname
+nickname = input("[NICKNAME] Choose your nickname: ")
 
-# Socket
+# Connecting To Server
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect(ADDR)
+client.connect(('192.168.0.6', 5050))
 
-def send(msg):
-    message = msg.encode(FORMAT)
-    msg_len = len(message)
-    send_length = str(msg_len).encode(FORMAT)
-    send_length += b' ' * (HEADER - len(send_length))
-    client.send(send_length)
-    client.send(message)
-    print(client.recv(2048).decode(FORMAT))
+# Listening to Server and Sending Nickname
+def receive():
+    while True:
+        try:
+            # Receive Message From Server
+            # If 'NICK' Send Nickname
+            message = client.recv(1024).decode('ascii')
+            if message == 'NICK':
+                client.send(nickname.encode('ascii'))
+            else:
+                print(message)
+        except:
+            # Close Connection When Error
+            print("[ERROR] An error occured!")
+            client.close()
+            break
 
-send("Hello")
-input()
-send("Today is awesome I finnaly learned sockets")
-input()
-send("See it works")
-input()
-send(DISCONNECTION_MESSAGE)
+def write():
+    while True:
+        message = '{}: {}'.format(nickname, input(''))
+        client.send(message.encode('ascii'))
+
+receive_thread = threading.Thread(target=receive)
+receive_thread.start()
+
+write_thread = threading.Thread(target=write)
+write_thread.start()
